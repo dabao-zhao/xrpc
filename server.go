@@ -2,7 +2,6 @@ package xrpc
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -277,23 +276,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	resps := s.call(rpcReqs)
 	log.Printf("s.call(rpcReq) result: %v", resps)
-	b, err := s.codec.EncodeResponses(resps)
+	var b []byte
+	if len(resps) == 1 {
+		b, err = s.codec.EncodeResponses(resps[0])
+	} else {
+		b, err = s.codec.EncodeResponses(resps)
+	}
 	log.Printf("s.codec.EncodeResponses err=%v", err)
 	_ = String(w, http.StatusOK, b)
 	return
-}
-
-func JSON(w http.ResponseWriter, statusCode int, v interface{}) error {
-	w.WriteHeader(statusCode)
-	w.Header().Set("Content-Type", "application/json")
-	b, err := json.Marshal(v)
-	if err != nil {
-		log.Printf("could not marshal v=%v, err=%v", v, err)
-		return err
-	}
-
-	_, err = io.WriteString(w, string(b))
-	return err
 }
 
 func String(w http.ResponseWriter, statusCode int, b []byte) error {
