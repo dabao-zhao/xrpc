@@ -35,7 +35,7 @@ const (
 	_verSize       uint16 = 2 // uint16
 	_opSize        uint16 = 2 // uint16
 	_seqSize       uint16 = 2 // uint16
-	_rawHeaderSize uint16 = _packSize + _headerSize + _verSize + _opSize + _seqSize
+	_rawHeaderSize        = _packSize + _headerSize + _verSize + _opSize + _seqSize
 
 	// offset
 	_packOffset   uint16 = 0
