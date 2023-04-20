@@ -91,81 +91,15 @@ func (s *Server) RegisterName(data interface{}, methodName string) error {
 func (s *Server) call(reqs []Request) (replies []Response) {
 	defer func() { log.Printf("server called end") }()
 	replies = make([]Response, len(reqs))
+	wg := sync.WaitGroup{}
+	wg.Add(len(reqs))
 	for idx, req := range reqs {
-		var (
-			reply Response
-		)
-
-		serviceName, methodName, err := parseFromRPCMethod(req.GetMethod())
-		if err != nil {
-			log.Printf("parseFromRPCMethod err=%v", err)
-			reply = s.codec.ErrResponse(InvalidRequest, err)
-			replies[idx] = reply
-			continue
-		}
-
-		// method existed or not
-		svcI, ok := s.m.Load(serviceName)
-		if !ok {
-			err := errors.New("rpc: can't find service " + serviceName)
-			reply = s.codec.ErrResponse(MethodNotFound, err)
-			replies[idx] = reply
-			continue
-		}
-
-		svc := svcI.(*service)
-		mType := svc.method[methodName]
-		if mType == nil {
-			err := errors.New("rpc: can't find method " + req.GetMethod())
-			reply = s.codec.ErrResponse(MethodNotFound, err)
-			reply.SetReqId(req.GetId())
-			replies[idx] = reply
-			continue
-		}
-
-		var (
-			argV       reflect.Value
-			argIsValue = false
-		)
-		if mType.ArgType.Kind() == reflect.Ptr {
-			argV = reflect.New(mType.ArgType.Elem())
-		} else {
-			argV = reflect.New(mType.ArgType)
-			argIsValue = true
-		}
-		if argIsValue {
-			argV = argV.Elem() // argV guaranteed to be a pointer now.
-		}
-
-		if err := s.codec.ReadRequestBody(req.GetParams(), argV.Interface()); err != nil {
-			log.Printf("could not readRequestBody err=%v", err)
-			err := errors.New("rpc: could not read request body " + req.GetMethod())
-			reply = s.codec.ErrResponse(InternalErr, err)
-			replies[idx] = reply
-			continue
-		}
-
-		var replyV reflect.Value
-		replyV = reflect.New(mType.ReplyType.Elem())
-		switch mType.ReplyType.Elem().Kind() {
-		case reflect.Map:
-			replyV.Elem().Set(reflect.MakeMap(mType.ReplyType.Elem()))
-		case reflect.Slice:
-			replyV.Elem().Set(reflect.MakeSlice(mType.ReplyType.Elem(), 0, 0))
-		}
-
-		if err := svc.call(mType, argV, replyV); err != nil {
-			reply = s.codec.ErrResponse(InternalErr, err)
-			reply.SetReqId(req.GetId())
-		} else {
-			// normal response
-			reply = s.codec.NewResponse(replyV.Interface())
-			reply.SetReqId(req.GetId())
-		}
-
-		replies[idx] = reply
+		go func(req Request, idx int) {
+			defer wg.Done()
+			replies[idx] = s.handleRequest(req)
+		}(req, idx)
 	}
-
+	wg.Wait()
 	return
 }
 
@@ -285,6 +219,77 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	log.Printf("s.codec.EncodeResponses err=%v", err)
 	_ = String(w, http.StatusOK, b)
 	return
+}
+
+func (s *Server) handleRequest(req Request) Response {
+	var (
+		reply Response
+	)
+
+	serviceName, methodName, err := parseFromRPCMethod(req.GetMethod())
+	if err != nil {
+		log.Printf("parseFromRPCMethod err=%v", err)
+		reply = s.codec.ErrResponse(InvalidRequest, err)
+		return reply
+	}
+
+	// method existed or not
+	svcI, ok := s.m.Load(serviceName)
+	if !ok {
+		err := errors.New("rpc: can't find service " + serviceName)
+		reply = s.codec.ErrResponse(MethodNotFound, err)
+		return reply
+	}
+
+	svc := svcI.(*service)
+	mType := svc.method[methodName]
+	if mType == nil {
+		err := errors.New("rpc: can't find method " + req.GetMethod())
+		reply = s.codec.ErrResponse(MethodNotFound, err)
+		reply.SetReqId(req.GetId())
+		return reply
+	}
+
+	var (
+		argV       reflect.Value
+		argIsValue = false
+	)
+	if mType.ArgType.Kind() == reflect.Ptr {
+		argV = reflect.New(mType.ArgType.Elem())
+	} else {
+		argV = reflect.New(mType.ArgType)
+		argIsValue = true
+	}
+	if argIsValue {
+		argV = argV.Elem() // argV guaranteed to be a pointer now.
+	}
+
+	if err := s.codec.ReadRequestBody(req.GetParams(), argV.Interface()); err != nil {
+		log.Printf("could not readRequestBody err=%v", err)
+		err := errors.New("rpc: could not read request body " + req.GetMethod())
+		reply = s.codec.ErrResponse(InternalErr, err)
+		return reply
+	}
+
+	var replyV reflect.Value
+	replyV = reflect.New(mType.ReplyType.Elem())
+	switch mType.ReplyType.Elem().Kind() {
+	case reflect.Map:
+		replyV.Elem().Set(reflect.MakeMap(mType.ReplyType.Elem()))
+	case reflect.Slice:
+		replyV.Elem().Set(reflect.MakeSlice(mType.ReplyType.Elem(), 0, 0))
+	}
+
+	if err := svc.call(mType, argV, replyV); err != nil {
+		reply = s.codec.ErrResponse(InternalErr, err)
+		reply.SetReqId(req.GetId())
+	} else {
+		// normal response
+		reply = s.codec.NewResponse(replyV.Interface())
+		reply.SetReqId(req.GetId())
+	}
+
+	return reply
 }
 
 func String(w http.ResponseWriter, statusCode int, b []byte) error {

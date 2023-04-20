@@ -36,10 +36,14 @@ type jsonRequest struct {
 func (j *jsonRequest) GetId() string     { return j.ID }
 func (j *jsonRequest) GetMethod() string { return j.Method }
 func (j *jsonRequest) GetParams() []byte {
-	typeOfA := reflect.TypeOf(j.Args)
-	if typeOfA.Kind() == reflect.Slice {
-		args := j.Args.([]interface{})
-		j.Args = args[0]
+	if j.Args != nil {
+		typeOfA := reflect.TypeOf(j.Args)
+		if typeOfA.Kind() == reflect.Slice {
+			args := j.Args.([]interface{})
+			if len(args) == 1 {
+				j.Args = args[0]
+			}
+		}
 	}
 
 	b, err := json.Marshal(j.Args)
