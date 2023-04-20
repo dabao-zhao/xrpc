@@ -169,12 +169,12 @@ func (j *jsonCodec) ReadRequest(data []byte) (reqs []xrpc.Request, err error) {
 	return reqs, nil
 }
 
-func (j *jsonCodec) ReadRequestBody(data []byte, rcvr interface{}) error {
-	return j.decode(data, rcvr)
+func (j *jsonCodec) ReadRequestBody(data []byte, out interface{}) error {
+	return j.decode(data, out)
 }
 
-func (j *jsonCodec) ReadResponseBody(data []byte, rcvr interface{}) error {
-	return j.decode(data, rcvr)
+func (j *jsonCodec) ReadResponseBody(data []byte, out interface{}) error {
+	return j.decode(data, out)
 }
 
 func (j *jsonCodec) EncodeRequests(v interface{}) ([]byte, error) {
