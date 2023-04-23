@@ -45,9 +45,9 @@ func (i *Int) Multi(args *MultiArgs, reply *MultiReply) error {
 func main() {
 	s := xrpc.NewServerWithCodec(jsonrpc.NewJSONCodec())
 	mineInt := new(Int)
-	s.Register(mineInt)
+	_ = s.Register(mineInt)
 	go s.ServeTCP("127.0.0.1:9999")
 
 	// 开启http
-	http.ListenAndServe(":9998", s)
+	_ = http.ListenAndServe(":9998", s)
 }

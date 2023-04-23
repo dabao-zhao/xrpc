@@ -7,16 +7,10 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"reflect"
 	"time"
 
 	"github.com/dabao-zhao/xrpc/proto"
-)
-
-var (
-	errMultiReplyTypePtr = errors.New("multi reply should be array or slice pointer")
-	errEmptyCodec        = errors.New("client has an empty codec")
-	errNotSupportMulti   = errors.New("current codec not support multi request")
-	errCtxTimeout        = errors.New("timeout")
 )
 
 func NewClientWithCodec(codec ClientCodec, tcpAddr string) *Client {
@@ -52,6 +46,36 @@ func (c *Client) Call(method string, args, reply interface{}) error {
 	return nil
 }
 
+func (c *Client) CallBatch(reqs []Request, reply interface{}) error {
+	t := reflect.TypeOf(c.codec)
+	if t.Kind() == reflect.Ptr && t.Elem().Name() != "jsonCodec" {
+		return errors.New("only jsonrpc support CallBatch")
+	}
+	r := reflect.TypeOf(reply)
+	if r.Kind() != reflect.Ptr || (r.Elem().Kind() != reflect.Slice && r.Elem().Kind() != reflect.Array) {
+		return errors.New("multi reply should be array or slice pointer")
+	}
+
+	resps := make([]Response, len(reqs))
+	if err := c.callTcp(reqs, &resps); err != nil {
+		return err
+	}
+	var results []interface{}
+	for _, resp := range resps {
+		results = append(results, resp.GetResult())
+	}
+
+	respBody, err := c.codec.EncodeResponses(results)
+	if err != nil {
+		return err
+	}
+	if err := c.codec.ReadResponseBody(respBody, reply); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (c *Client) callTcp(reqs []Request, resps *[]Response) (err error) {
 	if err = c.valid(); err != nil {
 		return err
@@ -69,7 +93,7 @@ func (c *Client) callTcp(reqs []Request, resps *[]Response) (err error) {
 
 	select {
 	case <-timeoutCtx.Done():
-		return errCtxTimeout
+		return errors.New("timeout")
 	default:
 		if pSend.Body, err = c.codec.EncodeRequests(&reqs); err != nil {
 			return err
@@ -104,7 +128,7 @@ func (c *Client) Close() {
 
 func (c *Client) valid() error {
 	if c.codec == nil {
-		return errEmptyCodec
+		return errors.New("client has an empty codec")
 	}
 
 	if c.tcpConn == nil {

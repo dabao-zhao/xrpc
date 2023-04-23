@@ -24,6 +24,7 @@ type Response interface {
 	Error() error
 	GetErrCode() int
 	GetReply() []byte
+	GetResult() interface{}
 	SetReqId(id string)
 }
 
@@ -51,9 +52,10 @@ func (d *defaultResponse) Error() error {
 	return errors.New(d.Err)
 }
 
-func (d *defaultResponse) GetReply() []byte   { return d.Reply }
-func (d *defaultResponse) GetErrCode() int    { return d.ErrCode }
-func (d *defaultResponse) SetReqId(id string) { d.Id = id }
+func (d *defaultResponse) GetReply() []byte       { return d.Reply }
+func (d *defaultResponse) GetResult() interface{} { return nil }
+func (d *defaultResponse) GetErrCode() int        { return d.ErrCode }
+func (d *defaultResponse) SetReqId(id string)     { d.Id = id }
 
 var (
 	_ Codec = &gobCodec{}
@@ -86,6 +88,7 @@ type ClientCodec interface {
 	EncodeRequests(v interface{}) ([]byte, error)
 	ReadResponse(data []byte) ([]Response, error)
 	ReadResponseBody(respBody []byte, data interface{}) error
+	EncodeResponses(v interface{}) ([]byte, error)
 }
 
 func NewGobCodec() Codec {
@@ -173,12 +176,12 @@ func (g *gobCodec) ReadResponse(data []byte) ([]Response, error) {
 	return resps, nil
 }
 
-func (g *gobCodec) ReadResponseBody(respBody []byte, data interface{}) error {
-	return g.Decode(respBody, data)
+func (g *gobCodec) ReadResponseBody(respBody []byte, out interface{}) error {
+	return g.Decode(respBody, out)
 }
 
-func (g *gobCodec) ReadRequestBody(reqBody []byte, data interface{}) error {
-	return g.Decode(reqBody, data)
+func (g *gobCodec) ReadRequestBody(reqBody []byte, out interface{}) error {
+	return g.Decode(reqBody, out)
 }
 
 func (g *gobCodec) EncodeRequests(v interface{}) ([]byte, error) {

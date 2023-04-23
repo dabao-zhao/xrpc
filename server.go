@@ -213,17 +213,18 @@ func (s *Server) handleRequest(req Request) Response {
 	var (
 		reply Response
 	)
+	defer func() {
+		reply.SetReqId(req.GetId())
+	}()
 	serviceName, methodName, err := parseFromRPCMethod(req.GetMethod())
 	if err != nil {
 		reply = s.codec.ErrResponse(InvalidRequest, err)
-		reply.SetReqId(req.GetId())
 		return reply
 	}
 
 	svcI, ok := s.m.Load(serviceName)
 	if !ok {
 		reply = s.codec.ErrResponse(MethodNotFound, errors.New("rpc: can't find service "+serviceName))
-		reply.SetReqId(req.GetId())
 		return reply
 	}
 
@@ -231,7 +232,6 @@ func (s *Server) handleRequest(req Request) Response {
 	mType := svc.method[methodName]
 	if mType == nil {
 		reply = s.codec.ErrResponse(MethodNotFound, errors.New("rpc: can't find method "+req.GetMethod()))
-		reply.SetReqId(req.GetId())
 		return reply
 	}
 
@@ -251,7 +251,6 @@ func (s *Server) handleRequest(req Request) Response {
 
 	if err := s.codec.ReadRequestBody(req.GetParams(), argV.Interface()); err != nil {
 		reply = s.codec.ErrResponse(InternalErr, errors.New("rpc: could not read request body "+req.GetMethod()))
-		reply.SetReqId(req.GetId())
 		return reply
 	}
 
@@ -266,10 +265,8 @@ func (s *Server) handleRequest(req Request) Response {
 
 	if err := svc.call(mType, argV, replyV); err != nil {
 		reply = s.codec.ErrResponse(InternalErr, err)
-		reply.SetReqId(req.GetId())
 	} else {
 		reply = s.codec.NewResponse(replyV.Interface())
-		reply.SetReqId(req.GetId())
 	}
 
 	return reply

@@ -59,6 +59,9 @@ func (j *jsonResponse) GetReply() []byte {
 	}
 	return b
 }
+func (j *jsonResponse) GetResult() interface{} {
+	return j.Result
+}
 func (j *jsonResponse) GetErrCode() int {
 	if j.Err == nil {
 		return xrpc.Success

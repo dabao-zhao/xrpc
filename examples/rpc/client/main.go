@@ -1,8 +1,9 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/dabao-zhao/xrpc"
-	"github.com/dabao-zhao/xrpc/jsonrpc"
 )
 
 type Args struct {
@@ -21,13 +22,13 @@ type MultiReply struct {
 }
 
 func main() {
-	c := xrpc.NewClientWithCodec(jsonrpc.NewJSONCodec(), "127.0.0.1:9999")
+	c := xrpc.NewClientWithCodec(xrpc.NewGobCodec(), "127.0.0.1:9999")
 
 	var sum int
-	c.Call("Int.Sum", &Args{A: 1, B: 2}, &sum)
-	println(sum)
+	_ = c.Call("Int.Sum", &Args{A: 1, B: 2}, &sum)
+	fmt.Println(sum)
 
 	var reply MultiReply
-	c.Call("Int.Multi", &MultiArgs{A: &Args{1, 2}, B: &Args{3, 4}}, &reply)
-	println(reply.A, reply.B)
+	_ = c.Call("Int.Multi", &MultiArgs{A: &Args{1, 2}, B: &Args{3, 4}}, &reply)
+	fmt.Println(reply.A, reply.B)
 }
