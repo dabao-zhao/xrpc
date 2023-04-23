@@ -177,47 +177,43 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	var (
 		data []byte
+		b    []byte
 		err  error
 	)
-	switch req.Method {
-	case http.MethodPost:
-		if data, err = io.ReadAll(req.Body); err != nil {
-			resp := s.codec.ErrResponse(InvalidParamErr, err)
-			b, err := s.codec.EncodeResponses(resp)
-			log.Printf("s.codec.EncodeResponses err=%v", err)
-			_ = String(w, http.StatusOK, b)
-			return
-		}
-		defer req.Body.Close()
-	default:
+
+	if req.Method != http.MethodPost {
 		err := errors.New("method not allowed: " + req.Method)
 		resp := s.codec.ErrResponse(MethodNotFound, err)
-		b, err := s.codec.EncodeResponses(resp)
-		log.Printf("s.codec.EncodeResponses err=%v", err)
-		_ = String(w, http.StatusOK, b)
+		b, _ := s.codec.EncodeResponses(resp)
+		_ = s.codec.Send(w, http.StatusOK, b)
 		return
 	}
 
-	log.Printf("[HTTP] got request data: %v", string(data))
+	if data, err = io.ReadAll(req.Body); err != nil {
+		resp := s.codec.ErrResponse(InvalidParamErr, err)
+		b, _ := s.codec.EncodeResponses(resp)
+		_ = s.codec.Send(w, http.StatusOK, b)
+		return
+	}
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(req.Body)
+
 	rpcReqs, err := s.codec.ReadRequest(data)
 	if err != nil {
 		resp := s.codec.ErrResponse(ParseErr, err)
-		b, err := s.codec.EncodeResponses(resp)
-		log.Printf("s.codec.EncodeResponses err=%v", err)
-		_ = String(w, http.StatusOK, b)
+		b, _ := s.codec.EncodeResponses(resp)
+		_ = s.codec.Send(w, http.StatusOK, b)
 		return
 	}
 
 	resps := s.call(rpcReqs)
-	log.Printf("s.call(rpcReq) result: %v", resps)
-	var b []byte
 	if len(resps) == 1 {
-		b, err = s.codec.EncodeResponses(resps[0])
+		b, _ = s.codec.EncodeResponses(resps[0])
 	} else {
-		b, err = s.codec.EncodeResponses(resps)
+		b, _ = s.codec.EncodeResponses(resps)
 	}
-	log.Printf("s.codec.EncodeResponses err=%v", err)
-	_ = String(w, http.StatusOK, b)
+	_ = s.codec.Send(w, http.StatusOK, b)
 	return
 }
 
@@ -228,12 +224,10 @@ func (s *Server) handleRequest(req Request) Response {
 
 	serviceName, methodName, err := parseFromRPCMethod(req.GetMethod())
 	if err != nil {
-		log.Printf("parseFromRPCMethod err=%v", err)
 		reply = s.codec.ErrResponse(InvalidRequest, err)
 		return reply
 	}
 
-	// method existed or not
 	svcI, ok := s.m.Load(serviceName)
 	if !ok {
 		err := errors.New("rpc: can't find service " + serviceName)
@@ -290,13 +284,6 @@ func (s *Server) handleRequest(req Request) Response {
 	}
 
 	return reply
-}
-
-func String(w http.ResponseWriter, statusCode int, b []byte) error {
-	w.WriteHeader(statusCode)
-	w.Header().Set("Content-Type", "text/plain")
-	_, err := io.WriteString(w, string(b))
-	return err
 }
 
 func parseFromRPCMethod(reqMethod string) (serviceName, methodName string, err error) {

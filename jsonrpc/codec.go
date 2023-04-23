@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"log"
 	"math/rand"
+	"net/http"
 	"reflect"
 	"time"
 
@@ -36,16 +37,6 @@ type jsonRequest struct {
 func (j *jsonRequest) GetId() string     { return j.ID }
 func (j *jsonRequest) GetMethod() string { return j.Method }
 func (j *jsonRequest) GetParams() []byte {
-	if j.Args != nil {
-		typeOfA := reflect.TypeOf(j.Args)
-		if typeOfA.Kind() == reflect.Slice {
-			args := j.Args.([]interface{})
-			if len(args) == 1 {
-				j.Args = args[0]
-			}
-		}
-	}
-
 	b, err := json.Marshal(j.Args)
 	if err != nil {
 		panic(err)
@@ -170,6 +161,28 @@ func (j *jsonCodec) ReadRequest(data []byte) (reqs []xrpc.Request, err error) {
 }
 
 func (j *jsonCodec) ReadRequestBody(data []byte, out interface{}) error {
+	var v interface{}
+	err := json.Unmarshal(data, &v)
+	if err != nil {
+		return err
+	}
+	typeOfV := reflect.TypeOf(v)
+	typeOfO := reflect.TypeOf(out)
+	if typeOfV.Kind() == reflect.Ptr {
+		typeOfV = typeOfV.Elem()
+	}
+	// 理论上 out 一直是指针
+	if typeOfO.Kind() == reflect.Ptr {
+		typeOfO = typeOfO.Elem()
+	}
+	if typeOfV.Kind() == reflect.Slice && typeOfO.Kind() != reflect.Slice {
+		args := v.([]interface{})
+		data, err = json.Marshal(args[0])
+		if err != nil {
+			return err
+		}
+	}
+
 	return j.decode(data, out)
 }
 
@@ -183,6 +196,13 @@ func (j *jsonCodec) EncodeRequests(v interface{}) ([]byte, error) {
 
 func (j *jsonCodec) EncodeResponses(v interface{}) ([]byte, error) {
 	return j.encode(v)
+}
+
+func (g *jsonCodec) Send(w http.ResponseWriter, statusCode int, b []byte) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	_, err := w.Write(b)
+	return err
 }
 
 func randId() string {

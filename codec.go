@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 )
 
 var (
@@ -77,6 +78,7 @@ type ServerCodec interface {
 	NewResponse(data interface{}) Response
 	ErrResponse(errCode int, err error) Response
 	EncodeResponses(v interface{}) ([]byte, error)
+	Send(w http.ResponseWriter, statusCode int, b []byte) error
 }
 
 type ClientCodec interface {
@@ -186,4 +188,11 @@ func (g *gobCodec) EncodeRequests(v interface{}) ([]byte, error) {
 
 func (g *gobCodec) EncodeResponses(v interface{}) ([]byte, error) {
 	return g.Encode(v)
+}
+
+func (g *gobCodec) Send(w http.ResponseWriter, statusCode int, b []byte) error {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(statusCode)
+	_, err := w.Write(b)
+	return err
 }
