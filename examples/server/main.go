@@ -19,6 +19,13 @@ func (i *Int) Sum(args *Args, reply *int) error {
 	return nil
 }
 
+func (i *Int) Sum2(args *[]int, reply *int) error {
+	for _, arg := range *args {
+		*reply += arg
+	}
+	return nil
+}
+
 type MultiArgs struct {
 	A *Args `json:"aa"`
 	B *Args `json:"bb"`
