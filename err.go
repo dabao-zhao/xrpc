@@ -27,12 +27,6 @@ func (r *Error) Error() string {
 	return fmt.Sprintf("Error(code: %d, errmsg: %s)", r.ErrCode, r.ErrMsg)
 }
 
-// Wrap an error into this
-func (r *Error) Wrap(err error) error {
-	r.ErrMsg = fmt.Sprintf("Errmsg=%s", err.Error())
-	return r
-}
-
 var errCodeMap = map[int]*Error{
 	ParseErr:        &Error{ParseErr, "ParseErr"},
 	InvalidRequest:  &Error{InvalidRequest, "InvalidRequest"},

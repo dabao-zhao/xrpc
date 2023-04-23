@@ -23,7 +23,6 @@ type service struct {
 func (s *service) call(mType *methodType, arg, reply reflect.Value) error {
 	function := mType.method.Func
 	returnValues := function.Call([]reflect.Value{s.val, arg, reply})
-	log.Printf("[service.call] argv: %v, replyv: %v", arg, reply)
 	if i := returnValues[0].Interface(); i != nil {
 		return i.(error)
 	}

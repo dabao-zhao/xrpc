@@ -5,7 +5,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"log"
 	"math/rand"
 	"net/http"
 	"reflect"
@@ -123,10 +122,8 @@ func (j *jsonCodec) NewRequest(method string, argv interface{}) xrpc.Request {
 func (j *jsonCodec) ReadResponse(data []byte) (resps []xrpc.Response, err error) {
 	jsonResps := make([]*jsonResponse, 0)
 	if err = j.decode(data, &jsonResps); err != nil {
-		log.Printf("try to decode into jsonResponseArray, err=%v", err)
 		resp := new(jsonResponse)
 		if err = j.decode(data, resp); err != nil {
-			log.Printf("try to decode into jsonResponse failed, err=%v", err)
 			return nil, err
 		}
 		resps = append(resps, resp)
@@ -143,10 +140,8 @@ func (j *jsonCodec) ReadResponse(data []byte) (resps []xrpc.Response, err error)
 func (j *jsonCodec) ReadRequest(data []byte) (reqs []xrpc.Request, err error) {
 	jsonReqs := make([]*jsonRequest, 0)
 	if err = j.decode(data, &jsonReqs); err != nil {
-		log.Printf("try to decode into jsonRequestArray, err=%v", err)
 		req := new(jsonRequest)
 		if err = j.decode(data, req); err != nil {
-			log.Printf("try to decode into jsonRequest failed, err=%v", err)
 			return nil, err
 		}
 		reqs = append(reqs, req)

@@ -36,15 +36,11 @@ func (s *Server) Register(data interface{}) error {
 	sName := reflect.Indirect(srv.val).Type().Name()
 
 	if sName == "" {
-		errMsg := "rpc.Register: no service name for type " + srv.typ.String()
-		log.Printf(errMsg)
-		return errors.New(errMsg)
+		return errors.New("rpc.Register: no service name for type " + srv.typ.String())
 	}
 
 	if !isExported(sName) {
-		errMsg := "rpc.Register: type " + sName + " is not exported"
-		log.Printf(errMsg)
-		return errors.New(errMsg)
+		return errors.New("rpc.Register: type " + sName + " is not exported")
 	}
 	srv.name = sName
 	srv.method = suitableMethods(srv.typ)
@@ -70,15 +66,11 @@ func (s *Server) RegisterName(data interface{}, methodName string) error {
 		s.m.Store(sName, loadedSrv)
 	} else {
 		if sName == "" {
-			errMsg := "rpc.Register: no service name for type " + srv.typ.String()
-			log.Printf(errMsg)
-			return errors.New(errMsg)
+			return errors.New("rpc.Register: no service name for type " + srv.typ.String())
 		}
 
 		if !isExported(sName) {
-			errMsg := "rpc.Register: type " + sName + " is not exported"
-			log.Printf(errMsg)
-			return errors.New(errMsg)
+			return errors.New("rpc.Register: type " + sName + " is not exported")
 		}
 		srv.name = sName
 		srv.method = make(map[string]*methodType)
@@ -89,7 +81,6 @@ func (s *Server) RegisterName(data interface{}, methodName string) error {
 }
 
 func (s *Server) call(reqs []Request) (replies []Response) {
-	defer func() { log.Printf("server called end") }()
 	replies = make([]Response, len(reqs))
 	wg := sync.WaitGroup{}
 	wg.Add(len(reqs))
@@ -108,27 +99,28 @@ func (s *Server) serveConn(conn net.Conn) {
 	wr := bufio.NewWriter(conn)
 
 	var (
-		pRecv = proto.New()
+		pRec  = proto.New()
 		pSend = proto.New()
 		resps = make([]Response, 0)
 	)
 
 	for {
-		if err := pRecv.ReadTCP(rr); err != nil {
+		if err := pRec.ReadTCP(rr); err != nil {
 			log.Printf("ReadTCP error: %v", err)
 			break
 		}
-
-		log.Printf("recv a new request: %v", string(pRecv.Body))
-		reqs, err := s.codec.ReadRequest(pRecv.Body)
+		reqs, err := s.codec.ReadRequest(pRec.Body)
 		if err != nil {
-			log.Printf("could not parse request: %v", err)
 			resps = append(resps, s.codec.ErrResponse(ParseErr, err))
-			goto wr
+			if pSend.Body, err = s.codec.EncodeResponses(resps); err != nil {
+				log.Printf("could not encode responses, err=%v", err)
+				continue
+			}
+			_ = pSend.WriteTCP(wr)
+			_ = wr.Flush()
+			continue
 		}
 		resps = s.call(reqs)
-		log.Printf("s.call(req) req: %v result: %v", reqs, resps)
-	wr:
 		if pSend.Body, err = s.codec.EncodeResponses(resps); err != nil {
 			log.Printf("could not encode responses, err=%v", err)
 			continue
@@ -221,25 +213,24 @@ func (s *Server) handleRequest(req Request) Response {
 	var (
 		reply Response
 	)
-
 	serviceName, methodName, err := parseFromRPCMethod(req.GetMethod())
 	if err != nil {
 		reply = s.codec.ErrResponse(InvalidRequest, err)
+		reply.SetReqId(req.GetId())
 		return reply
 	}
 
 	svcI, ok := s.m.Load(serviceName)
 	if !ok {
-		err := errors.New("rpc: can't find service " + serviceName)
-		reply = s.codec.ErrResponse(MethodNotFound, err)
+		reply = s.codec.ErrResponse(MethodNotFound, errors.New("rpc: can't find service "+serviceName))
+		reply.SetReqId(req.GetId())
 		return reply
 	}
 
 	svc := svcI.(*service)
 	mType := svc.method[methodName]
 	if mType == nil {
-		err := errors.New("rpc: can't find method " + req.GetMethod())
-		reply = s.codec.ErrResponse(MethodNotFound, err)
+		reply = s.codec.ErrResponse(MethodNotFound, errors.New("rpc: can't find method "+req.GetMethod()))
 		reply.SetReqId(req.GetId())
 		return reply
 	}
@@ -259,9 +250,8 @@ func (s *Server) handleRequest(req Request) Response {
 	}
 
 	if err := s.codec.ReadRequestBody(req.GetParams(), argV.Interface()); err != nil {
-		log.Printf("could not readRequestBody err=%v", err)
-		err := errors.New("rpc: could not read request body " + req.GetMethod())
-		reply = s.codec.ErrResponse(InternalErr, err)
+		reply = s.codec.ErrResponse(InternalErr, errors.New("rpc: could not read request body "+req.GetMethod()))
+		reply.SetReqId(req.GetId())
 		return reply
 	}
 
@@ -278,7 +268,6 @@ func (s *Server) handleRequest(req Request) Response {
 		reply = s.codec.ErrResponse(InternalErr, err)
 		reply.SetReqId(req.GetId())
 	} else {
-		// normal response
 		reply = s.codec.NewResponse(replyV.Interface())
 		reply.SetReqId(req.GetId())
 	}
@@ -298,5 +287,5 @@ func parseFromRPCMethod(reqMethod string) (serviceName, methodName string, err e
 	serviceName = reqMethod[:dot]
 	methodName = reqMethod[dot+1:]
 
-	return serviceName, methodName, nil
+	return
 }

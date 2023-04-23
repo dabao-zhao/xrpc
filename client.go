@@ -5,10 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dabao-zhao/xrpc/proto"
 	"log"
 	"net"
 	"time"
+
+	"github.com/dabao-zhao/xrpc/proto"
 )
 
 var (
@@ -38,21 +39,16 @@ type Client struct {
 }
 
 func (c *Client) Call(method string, args, reply interface{}) error {
-	log.Printf("a new call ")
 	req := c.codec.NewRequest(method, args)
 	resps := make([]Response, 0)
 	if err := c.callTcp([]Request{req}, &resps); err != nil {
-		log.Printf("could not callTcp err=%v", err)
 		return err
 	}
 
 	resp := resps[0]
-	log.Printf("len(resps)=%d, resp.Reply()=%s", len(resps), resp.GetReply())
 	if err := c.codec.ReadResponseBody(resp.GetReply(), reply); err != nil {
-		log.Printf("could not ReadReponseBody err=%v", err)
 		return err
 	}
-	log.Printf("call done")
 	return nil
 }
 
@@ -65,7 +61,7 @@ func (c *Client) callTcp(reqs []Request, resps *[]Response) (err error) {
 		wr    = bufio.NewWriter(c.tcpConn)
 		rr    = bufio.NewReader(c.tcpConn)
 		pSend = proto.New()
-		pRecv = proto.New()
+		pRec  = proto.New()
 	)
 
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -76,25 +72,20 @@ func (c *Client) callTcp(reqs []Request, resps *[]Response) (err error) {
 		return errCtxTimeout
 	default:
 		if pSend.Body, err = c.codec.EncodeRequests(&reqs); err != nil {
-			log.Printf("could not EncodeRequests, err=%v", err)
 			return err
 		}
 
 		if err := pSend.WriteTCP(wr); err != nil {
-			log.Printf("could not WriteTCP, err=%v", err)
 			return err
 		}
 		_ = wr.Flush()
 
-		if err := pRecv.ReadTCP(rr); err != nil {
-			log.Printf("could not ReadTCP, err=%v", err)
+		if err := pRec.ReadTCP(rr); err != nil {
 			return err
 		}
 
-		log.Printf("recv response body: %s", pRecv.Body)
-		*resps, err = c.codec.ReadResponse(pRecv.Body)
+		*resps, err = c.codec.ReadResponse(pRec.Body)
 		if err != nil {
-			log.Printf("could not ReadResponses, err=%v", err)
 			return err
 		}
 	}

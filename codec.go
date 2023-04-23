@@ -159,8 +159,7 @@ func (g *gobCodec) NewRequest(method string, data interface{}) Request {
 func (g *gobCodec) ReadRequest(data []byte) ([]Request, error) {
 	reqs := make([]Request, 0)
 	if err := g.Decode(data, &reqs); err != nil {
-		log.Printf("[ReadRequest] could not g.Decode(data, reqs), err=%v", err)
-		return nil, err
+		return nil, fmt.Errorf("could not g.Decode(data, reqs), err=%v", err)
 	}
 
 	return reqs, nil
