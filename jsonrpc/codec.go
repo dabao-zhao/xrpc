@@ -23,17 +23,17 @@ const (
 	version    = "2.0"
 	baseStr    = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	baseStrLen = 62
-	lenReqID   = 8
+	lenReqId   = 8
 )
 
 type jsonRequest struct {
-	ID      string      `json:"id"`
+	Id      string      `json:"id"`
 	Method  string      `json:"method"`
 	Args    interface{} `json:"params"`
 	Version string      `json:"jsonrpc"`
 }
 
-func (j *jsonRequest) GetId() string     { return j.ID }
+func (j *jsonRequest) GetId() string     { return j.Id }
 func (j *jsonRequest) GetMethod() string { return j.Method }
 func (j *jsonRequest) GetParams() []byte {
 	b, err := json.Marshal(j.Args)
@@ -44,13 +44,13 @@ func (j *jsonRequest) GetParams() []byte {
 }
 
 type jsonResponse struct {
-	ID      string      `json:"id"`
+	Id      string      `json:"id"`
 	Err     *xrpc.Error `json:"error,omitempty"`
 	Result  interface{} `json:"result,omitempty"`
 	Version string      `json:"jsonrpc"`
 }
 
-func (j *jsonResponse) SetReqId(id string) { j.ID = id }
+func (j *jsonResponse) SetReqId(id string) { j.Id = id }
 func (j *jsonResponse) Error() error       { return j.Err }
 func (j *jsonResponse) GetReply() []byte {
 	b, err := json.Marshal(j.Result)
@@ -89,31 +89,16 @@ func (j *jsonCodec) decode(data []byte, out interface{}) error {
 func (j *jsonCodec) NewResponse(reply interface{}) xrpc.Response {
 	resp := &jsonResponse{
 		Version: version,
-		ID:      "",
+		Id:      "",
 		Result:  reply,
 	}
 
 	return resp
 }
 
-func (j *jsonCodec) ErrResponse(errCode int, err error) xrpc.Response {
-	errMsg := ""
-	if err != nil {
-		errMsg = err.Error()
-	}
-
-	return &jsonResponse{
-		Err: &xrpc.Error{
-			ErrCode: errCode,
-			ErrMsg:  errMsg,
-		},
-		Version: version,
-	}
-}
-
 func (j *jsonCodec) NewRequest(method string, argv interface{}) xrpc.Request {
 	req := &jsonRequest{
-		ID:      randId(),
+		Id:      randId(),
 		Method:  method,
 		Args:    argv,
 		Version: version,
@@ -196,7 +181,22 @@ func (j *jsonCodec) EncodeResponses(v interface{}) ([]byte, error) {
 	return j.encode(v)
 }
 
-func (g *jsonCodec) Send(w http.ResponseWriter, statusCode int, b []byte) error {
+func (j *jsonCodec) ErrResponse(errCode int, err error) xrpc.Response {
+	errMsg := ""
+	if err != nil {
+		errMsg = err.Error()
+	}
+
+	return &jsonResponse{
+		Err: &xrpc.Error{
+			ErrCode: errCode,
+			ErrMsg:  errMsg,
+		},
+		Version: version,
+	}
+}
+
+func (j *jsonCodec) Send(w http.ResponseWriter, statusCode int, b []byte) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	_, err := w.Write(b)
@@ -205,9 +205,9 @@ func (g *jsonCodec) Send(w http.ResponseWriter, statusCode int, b []byte) error 
 
 func randId() string {
 	bs := []byte(baseStr)
-	result := make([]byte, 0, lenReqID)
+	result := make([]byte, 0, lenReqId)
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for i := 0; i < lenReqID; i++ {
+	for i := 0; i < lenReqId; i++ {
 		result = append(result, bs[r.Intn(baseStrLen)])
 	}
 	m := md5.New()
